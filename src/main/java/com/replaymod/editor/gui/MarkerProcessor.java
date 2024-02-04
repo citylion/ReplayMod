@@ -68,7 +68,7 @@ public class MarkerProcessor {
         Paused,
     }
 
-    private static List<String> getOutputSuffixes(ReplayFile inputReplayFile) throws IOException {
+    public static List<String> getOutputSuffixes(ReplayFile inputReplayFile) throws IOException {
         List<Marker> markers = inputReplayFile.getMarkers().or(HashSet::new)
                 .stream().sorted(Comparator.comparing(Marker::getTime)).collect(Collectors.toList());
         int nextSuffix = 0;

@@ -179,6 +179,8 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
         });
     }
 
+
+
     public void save(net.minecraft.network.Packet packet) {
         Packet encoded;
         try {
@@ -194,10 +196,13 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
 
     public void save(Packet packet) {
 
+        /*
         if (packet.getType() == PacketType.Chat) {
             // Skip saving chat messages
             return;
         }
+
+         */
 
         // If we're not on the main thread (i.e. we're on the netty thread), then we need to schedule the saving
         // to happen on the main thread so we can guarantee correct ordering of inbound and inject packets.
@@ -257,6 +262,8 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
             logger.error("Writing packet:", e);
         }
     }
+
+
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
@@ -432,6 +439,8 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
     }
 
     private static Packet encodeMcPacket(NetworkState connectionState, net.minecraft.network.Packet packet) throws Exception {
+
+
         //#if MC>=10800
         Integer packetId = connectionState.getPacketId(NetworkSide.CLIENTBOUND, packet);
         //#else
@@ -443,7 +452,7 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
         ByteBuf byteBuf = Unpooled.buffer();
         try {
             packet.write(new PacketByteBuf(byteBuf));
-            return new Packet(
+            Packet packet1 = new Packet(
                     MCVer.getPacketTypeRegistry(connectionState),
                     packetId,
                     com.github.steveice10.netty.buffer.Unpooled.wrappedBuffer(
@@ -452,6 +461,7 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
                             byteBuf.readableBytes()
                     )
             );
+            return packet1;
         } finally {
             byteBuf.release();
         }

@@ -1,9 +1,22 @@
 package com.replaymod.replay.gui.screen;
 
 import com.google.common.util.concurrent.SettableFuture;
+import com.replaymod.editor.ReplayModEditor;
+import com.replaymod.editor.gui.MarkerProcessor;
 import com.replaymod.render.gui.GuiRenderQueue;
 import com.replaymod.render.rendering.VideoRenderer;
 import com.replaymod.render.utils.RenderJob;
+import com.replaymod.replaystudio.PacketData;
+import com.replaymod.replaystudio.data.Marker;
+import com.replaymod.replaystudio.filter.SquashFilter;
+import com.replaymod.replaystudio.filter.StreamFilter;
+import com.replaymod.replaystudio.io.ReplayInputStream;
+import com.replaymod.replaystudio.io.ReplayOutputStream;
+import com.replaymod.replaystudio.lib.viaversion.api.protocol.packet.State;
+import com.replaymod.replaystudio.protocol.PacketType;
+import com.replaymod.replaystudio.protocol.PacketTypeRegistry;
+import com.replaymod.replaystudio.stream.IteratorStream;
+import com.replaymod.replaystudio.stream.PacketStream;
 import de.johni0702.minecraft.gui.GuiRenderer;
 import de.johni0702.minecraft.gui.RenderInfo;
 import de.johni0702.minecraft.gui.versions.Image;
@@ -45,26 +58,15 @@ import org.apache.commons.io.filefilter.SuffixFileFilter;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 
-import java.io.File;
-import java.io.FileFilter;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static com.replaymod.editor.gui.MarkerProcessor.getOutputSuffixes;
 import static com.replaymod.replay.ReplayModReplay.LOGGER;
 import static de.johni0702.minecraft.gui.versions.MCVer.getFontRenderer;
 
@@ -82,6 +84,111 @@ public class GuiReplayViewer extends GuiScreen {
             this.loadButton.onClick();
         }
     });
+
+    //citylion
+    public final GuiButton chatDeleteButton = new GuiButton().onClick(new Runnable() {
+        @Override
+        public void run() {
+
+            List<GuiReplayEntry> selected = list.getSelected();
+
+            if(selected.size() != 1){
+                getMinecraft().openScreen(new NoticeScreen(
+                        //#if MC>=11400
+                        GuiReplayViewer.this::display,
+                        new TranslatableText("replaymod.gui.toomanyselected1"),
+                        new TranslatableText("replaymod.gui.toomanyselected2")
+                        //#else
+                        //$$ I18n.format("replaymod.gui.viewer.delete.failed1"),
+                        //$$ I18n.format("replaymod.gui.viewer.delete.failed2")
+                        //#endif
+                ));
+                return;
+            }
+            else if (selected.size() == 1) {
+
+                File file = selected.get(0).file;
+
+                try (ReplayFile replayFile = ReplayMod.instance.files.open(selected.get(0).file.toPath())) {
+
+                    String[] namecomps = selected.get(0).file.getName().split("\\.");
+                    String rebuiltname = namecomps[0] + "_NO_CHAT." + namecomps[1];
+                    ReplayFile rebuiltreplay = replayFile;
+                    File rebuiltfile = new File(selected.get(0).file.getParent(),rebuiltname);
+                    PacketTypeRegistry registry = MCVer.getPacketTypeRegistry(State.PLAY);
+
+                    try {
+                        List<Marker> markers = replayFile.getMarkers().or(HashSet::new)
+                                .stream().sorted(Comparator.comparing(Marker::getTime)).collect(Collectors.toList());
+
+                        Iterator<String> outputFileSuffixes = getOutputSuffixes(replayFile).iterator();
+
+
+                        ReplayInputStream replayInputStream = replayFile.getPacketData(registry);
+
+
+
+                        PacketData nextPacket = replayInputStream.readPacket();
+
+
+                        while (nextPacket != null && outputFileSuffixes.hasNext()) {
+
+                            try (ReplayFile outputReplayFile = rebuiltreplay) {
+                                long duration = 0;
+                                Set<Marker> outputMarkers = new HashSet<>();
+                                ReplayMetaData metaData = replayFile.getMetaData();
+                                metaData.setDate(metaData.getDate());
+
+                                try (ReplayOutputStream replayOutputStream = outputReplayFile.writePacketData()) {
+                                    boolean hasFurtherOutputs = outputFileSuffixes.hasNext();
+                                    while (nextPacket != null) {
+
+                                        if(nextPacket.getPacket().getType() != PacketType.Chat){
+                                            replayOutputStream.write(nextPacket.getTime(),nextPacket.getPacket().copy());
+                                        }
+
+                                            duration = nextPacket.getTime();
+
+                                        nextPacket.release();
+                                        nextPacket = replayInputStream.readPacket();
+                                    }
+                                }
+
+                                metaData.setDuration((int) duration);
+                                outputReplayFile.writeMetaData(registry, metaData);
+
+                                outputReplayFile.writeMarkers(outputMarkers);
+
+                                outputReplayFile.writeModInfo(replayFile.getModInfo());
+
+                                // We could filter these but ReplayStudio doesn't yet provide a nice method for determining
+                                // which ones are used.
+                                Map<Integer, String> resourcePackIndex = replayFile.getResourcePackIndex();
+                                if (resourcePackIndex != null) {
+                                    outputReplayFile.writeResourcePackIndex(resourcePackIndex);
+                                    for (String hash : resourcePackIndex.values()) {
+                                        try (InputStream in = replayFile.getResourcePack(hash).get();
+                                             OutputStream out = outputReplayFile.writeResourcePack(hash)) {
+                                            com.replaymod.replaystudio.util.Utils.copy(in, out);
+                                        }
+                                    }
+                                }
+                                outputReplayFile.saveTo(rebuiltfile);
+                            }
+                        }
+                    }
+                    catch (Exception e){
+                        e.printStackTrace();
+                    }
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+            }
+
+        }
+    }).setSize(73, 20).setI18nLabel("replaymod.gui.chatscrub").setDisabled();
 
     public final GuiButton loadButton = new GuiButton().onClick(new Runnable() {
         private boolean loading = false;
@@ -211,11 +318,11 @@ public class GuiReplayViewer extends GuiScreen {
     }).setSize(73, 20).setI18nLabel("replaymod.gui.cancel");
 
     public final List<GuiButton> replaySpecificButtons = new ArrayList<>();
-    { replaySpecificButtons.addAll(Arrays.asList(renameButton)); }
+    { replaySpecificButtons.addAll(Arrays.asList(renameButton,chatDeleteButton)); }
     public final GuiPanel editorButton = new GuiPanel();
 
     public final GuiPanel upperButtonPanel = new GuiPanel().setLayout(new HorizontalLayout().setSpacing(5))
-            .addElements(null, loadButton);
+            .addElements(null, loadButton, chatDeleteButton);
     public final GuiPanel lowerButtonPanel = new GuiPanel().setLayout(new HorizontalLayout().setSpacing(5))
             .addElements(null, renameButton, deleteButton, editorButton, cancelButton);
     public final GuiPanel buttonPanel = new GuiPanel(this).setLayout(new VerticalLayout().setSpacing(5))

@@ -66,7 +66,10 @@ public class ReplayMod implements Module, Scheduler {
 
     private final GuiBackgroundProcesses backgroundProcesses = new GuiBackgroundProcesses();
     public final ReplayFoldersService folders = new ReplayFoldersService(settingsRegistry);
+
     public final ReplayFilesService files = new ReplayFilesService(folders);
+
+
 
     /**
      * Whether the current MC version is supported by the embedded ReplayStudio version.

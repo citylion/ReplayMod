@@ -34,6 +34,8 @@ public class ReplayFilesService {
         return open(path, path);
     }
 
+
+
     public ReplayFile open(Path input, Path output) throws IOException {
         Path realInput = input != null ? input.toAbsolutePath().normalize() : null;
         Path realOutput = output.toAbsolutePath().normalize();

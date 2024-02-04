@@ -72,4 +72,6 @@ class SettingsRegistryBackend {
     public void save() {
         configuration.save();
     }
+
+
 }

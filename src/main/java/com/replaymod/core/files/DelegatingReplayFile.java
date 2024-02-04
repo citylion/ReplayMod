@@ -72,6 +72,7 @@ public class DelegatingReplayFile implements ReplayFile {
 
     @Override
     public void saveTo(File target) throws IOException {
+
         this.delegate.saveTo(target);
     }
 
