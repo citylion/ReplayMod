@@ -17,6 +17,7 @@ import com.replaymod.replaystudio.data.Marker;
 import com.replaymod.replaystudio.io.ReplayOutputStream;
 import com.replaymod.replaystudio.lib.viaversion.api.protocol.packet.State;
 import com.replaymod.replaystudio.protocol.Packet;
+import com.replaymod.replaystudio.protocol.PacketType;
 import com.replaymod.replaystudio.replay.ReplayFile;
 import com.replaymod.replaystudio.replay.ReplayMetaData;
 import de.johni0702.minecraft.gui.container.VanillaGuiScreen;
@@ -189,7 +190,15 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
         save(encoded);
     }
 
+
+
     public void save(Packet packet) {
+
+        if (packet.getType() == PacketType.Chat) {
+            // Skip saving chat messages
+            return;
+        }
+
         // If we're not on the main thread (i.e. we're on the netty thread), then we need to schedule the saving
         // to happen on the main thread so we can guarantee correct ordering of inbound and inject packets.
         // Otherwise, injected packets may end up further down the packet stream than they were supposed to and other
